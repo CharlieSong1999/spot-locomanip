@@ -6,122 +6,107 @@
 <title>Spot Loco-Manipulation Stack</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <meta name="description" content="An LLM agent authors whole-body skills for a Boston Dynamics Spot; a physics-based sampling MPC runs them outdoors with no demonstrations and no per-task training.">
+<script>try{var t=localStorage.getItem("theme");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,400..800&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap">
 <style>
-/* Layout: centered project page. Full-bleed alternating bands; media up to 1080px, text up to 720px. Spot yellow is the single accent. */
+/* Layout: paper-like page in the style of end2end-diffusion.github.io. One 1080px container, Lora throughout, hairline rules, rounded image cards with overlaid titles, rows for findings. */
 :root {
-  --bg: #ffffff; --band: #f4f5f2; --surface: #ffffff; --ink: #15181c; --muted: #5c656d; --line: #e2e4df;
-  --accent: #f2bb0d; --accent-ink: #8a6500; --ours: #fff3c4; --cool: #2b6f93; --warm: #c9541a;
-  --shadow: 0 1px 2px rgba(20,24,28,.06), 0 12px 32px -12px rgba(20,24,28,.22);
-  --f-display: "Archivo", "Helvetica Neue", Arial, sans-serif;
-  --f-body: "Source Sans 3", "Helvetica Neue", Arial, sans-serif;
-  --f-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --bg: #FAFAFA; --surface: #ffffff; --ink: #1a1a1a; --muted: #555555; --line: #e5e2dd;
+  --accent: #2563eb; --ours: #f0eee6; --ours-line: #87867f; --cool: #6a9bcc; --warm: #d97757; --olive: #788c5d;
+  --f: "Lora", Georgia, "Times New Roman", serif;
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg: #0f1113; --band: #16191c; --surface: #1b1f23; --ink: #eceeea; --muted: #a3aab0; --line: #2d3339;
-    --accent: #f5c531; --accent-ink: #f5cf5a; --ours: #3b3314; --cool: #74b6d6; --warm: #f08c55;
-    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 12px 32px -12px rgba(0,0,0,.7);
-    color-scheme: dark;
-  }
+  :root:not([data-theme="light"]) { --bg: #0a0a0a; --surface: #141413; --ink: #e8e6dc; --muted: #9ca3af; --line: #3d3d3a; --accent: #60a5fa; --ours: #2a2925; --ours-line: #b0aea5; --cool: #6a9bcc; --warm: #d97757; --olive: #9db27f; color-scheme: dark; }
 }
-:root[data-theme="dark"] {
-  --bg: #0f1113; --band: #16191c; --surface: #1b1f23; --ink: #eceeea; --muted: #a3aab0; --line: #2d3339;
-  --accent: #f5c531; --accent-ink: #f5cf5a; --ours: #3b3314; --cool: #74b6d6; --warm: #f08c55;
-  --shadow: 0 1px 2px rgba(0,0,0,.4), 0 12px 32px -12px rgba(0,0,0,.7);
-  color-scheme: dark;
-}
+:root[data-theme="dark"] { --bg: #0a0a0a; --surface: #141413; --ink: #e8e6dc; --muted: #9ca3af; --line: #3d3d3a; --accent: #60a5fa; --ours: #2a2925; --ours-line: #b0aea5; --cool: #6a9bcc; --warm: #d97757; --olive: #9db27f; color-scheme: dark; }
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
-body { margin: 0; background: var(--bg); color: var(--ink); font: 18px/1.55 var(--f-body); }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 18px/1.7 var(--f); transition: background-color .3s ease, color .3s ease; }
 img, video { max-width: 100%; display: block; }
-a { color: inherit; text-decoration-color: var(--accent); text-decoration-thickness: 2px; text-underline-offset: 3px; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
 a:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.band { background: var(--band); }
-.inner { max-width: 1112px; margin: 0 auto; padding-block: 64px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; gap: 28px; justify-items: center; }
-.inner > * { width: 100%; min-width: 0; }
-.narrow { max-width: 760px; }
-h1, h2, h3 { font-family: var(--f-display); text-wrap: balance; line-height: 1.1; margin: 0; }
-h1 { font-size: clamp(2.2rem, 1.2rem + 4.4vw, 4.2rem); font-weight: 800; font-stretch: 116%; letter-spacing: -0.025em; text-align: center; }
-h1 .y { box-shadow: inset 0 -0.26em 0 var(--accent); }
-h2 { font-size: clamp(1.6rem, 1.2rem + 1.6vw, 2.3rem); font-weight: 750; font-stretch: 110%; letter-spacing: -0.015em; text-align: center; }
-h3 { font-size: 1.05rem; font-weight: 700; }
+.container { max-width: 1112px; margin: 0 auto; padding-block: 28px 56px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+h1, h2, h3 { font-family: var(--f); margin: 0; line-height: 1.2; text-wrap: balance; }
 p { margin: 0; }
-.mono { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
-.hero .inner { padding-block: 56px 28px; gap: 16px; }
-.status { display: inline-flex; align-items: center; gap: 8px; font-family: var(--f-mono); font-size: 0.74rem; border: 1px solid var(--line); border-radius: 999px; padding: 4px 12px; width: fit-content; background: var(--surface); }
-.status::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
-.byline { font-family: var(--f-display); font-size: 1.05rem; text-align: center; }
-.byline .aff { color: var(--muted); display: block; font-size: 0.95rem; margin-top: 2px; }
-.claim { font-size: clamp(1.15rem, 1rem + 0.7vw, 1.4rem); line-height: 1.42; text-align: center; max-width: 34em; text-wrap: balance; color: var(--ink); }
-.claim b { font-weight: 600; box-shadow: inset 0 -0.28em 0 var(--accent); }
-.kicker { display: inline-flex; align-items: center; gap: 10px; font-family: var(--f-mono); font-size: 0.74rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); width: fit-content; }
-.kicker .n { background: var(--accent); color: #15181c; border-radius: 999px; width: 1.9em; height: 1.9em; display: grid; place-items: center; font-weight: 600; letter-spacing: 0; }
+.top { display: flex; justify-content: space-between; align-items: center; padding-bottom: 24px; min-height: 3rem; }
+.top .logo { font-weight: 700; font-size: 1.4rem; color: var(--ink); }
+.top .right { display: flex; align-items: center; gap: 20px; font-size: 0.9rem; font-weight: 600; }
+.top .right a { color: var(--muted); } .top .right a:hover { color: var(--ink); text-decoration: none; }
+.top .div { width: 1px; height: 1.5rem; background: var(--line); }
+.toggle { background: none; border: 0; cursor: pointer; color: var(--ink); padding: 6px; display: grid; place-items: center; transition: transform .3s ease; }
+.toggle:hover { transform: scale(1.1); }
+.toggle svg { width: 22px; height: 22px; fill: currentColor; }
+.mission { border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 32px 0; display: grid; gap: 14px; }
+.mission h1 { font-size: clamp(1.8rem, 1.2rem + 2.2vw, 2.5rem); font-weight: 700; }
+.mission p { color: var(--muted); font-size: 1rem; line-height: 1.6; max-width: 60em; }
+.mission .by { font-size: 0.95rem; color: var(--ink); }
+.mission .by span { color: var(--muted); }
+.banners { padding: 36px 0 12px; display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 16px; }
+.card { position: relative; border-radius: 12px; overflow: hidden; background: #000; height: clamp(16rem, 26vw, 23rem); grid-column: span 10; }
+.card.tall { height: clamp(18rem, 44vw, 36rem); }
+.card.c6 { grid-column: span 6; } .card.c4 { grid-column: span 4; }
+@media (max-width: 760px) { .card.c6, .card.c4 { grid-column: span 10; } }
+.card video, .card img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transition: transform .3s cubic-bezier(.165,.84,.44,1); }
+.card:hover video, .card:hover img { transform: scale(1.06); }
+.card .t { position: absolute; left: 0; right: 0; bottom: 0; padding: 22px 24px; color: #fff; font-weight: 700; font-size: clamp(1.2rem, 0.9rem + 1.2vw, 1.9rem); line-height: 1.15; text-shadow: 0 2px 10px rgba(0,0,0,.75); background: linear-gradient(to top, rgba(0,0,0,.6), rgba(0,0,0,0)); }
+.card .t small { display: block; font-weight: 400; font-size: 0.95rem; margin-top: 4px; }
+section { padding: 44px 0 8px; display: grid; gap: 24px; }
+section > h2 { font-size: clamp(1.6rem, 1.2rem + 1.4vw, 2.2rem); font-weight: 700; text-align: center; }
+.sub { color: var(--muted); text-align: center; max-width: 44em; margin: -8px auto 0; font-size: 1.02rem; line-height: 1.6; }
+.sub b { color: var(--ink); font-weight: 600; }
+.rule { border: 0; border-top: 1px solid var(--ink); margin: 0; }
 figure { margin: 0; display: grid; gap: 10px; }
-figcaption { font-size: 0.92rem; color: var(--muted); text-align: center; max-width: 46em; margin: 0 auto; }
+figcaption { font-size: 0.9rem; color: var(--muted); text-align: center; max-width: 46em; margin: 0 auto; line-height: 1.5; }
 figcaption b { color: var(--ink); font-weight: 600; }
-.frame { position: relative; border-radius: 14px; overflow: hidden; background: #000; box-shadow: var(--shadow); }
+.frame { position: relative; border-radius: 12px; overflow: hidden; background: #000; }
 .frame video, .frame img { width: 100%; height: auto; }
-.frame.light { background: #fff; }
-.badge { position: absolute; left: 12px; top: 12px; font-family: var(--f-mono); font-size: 0.72rem; background: rgba(15,17,19,.72); color: #fff; padding: 3px 9px; border-radius: 999px; }
-.strip { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
-@media (max-width: 760px) { .strip { grid-template-columns: 1fr; } }
-.strip .frame { aspect-ratio: 4 / 3; }
-.strip .frame video, .strip .frame img { width: 100%; height: 100%; object-fit: cover; }
-.strip figcaption { text-align: left; margin: 0; font-size: 0.98rem; color: var(--ink); }
-.strip figcaption span { display: block; color: var(--muted); font-size: 0.88rem; }
-.two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px; align-items: start; }
+.frame.light { background: #fff; border: 1px solid var(--line); }
+.two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; align-items: start; }
 @media (max-width: 760px) { .two { grid-template-columns: 1fr; } }
-.diagram { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px; }
+.narrow { max-width: 760px; margin: 0 auto; width: 100%; }
+.diagram { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
 .diagram svg { min-width: 760px; width: 100%; height: auto; display: block; }
-.diagram text { font-family: var(--f-display); fill: var(--ink); }
-.diagram .sm { font-family: var(--f-mono); font-size: 11px; fill: var(--muted); }
-.diagram .box { fill: var(--surface); stroke: var(--ink); stroke-width: 1.4; }
-.diagram .ours { fill: var(--ours); stroke: var(--accent-ink); stroke-width: 1.4; }
+.diagram text { font-family: var(--f); fill: var(--ink); }
+.diagram .sm { font-size: 11.5px; fill: var(--muted); font-style: italic; }
+.diagram .box { fill: var(--surface); stroke: var(--ink); stroke-width: 1.2; }
+.diagram .ours { fill: var(--ours); stroke: var(--ours-line); stroke-width: 1.2; }
 .diagram .zone { fill: none; stroke: var(--line); stroke-width: 1.5; stroke-dasharray: 5 4; }
-.diagram .arr { stroke: var(--ink); stroke-width: 1.4; fill: none; }
-.diagram .link { stroke: var(--muted); stroke-width: 1.4; fill: none; stroke-dasharray: 3 3; }
+.diagram .arr { stroke: var(--ink); stroke-width: 1.2; fill: none; }
+.diagram .link { stroke: var(--muted); stroke-width: 1.2; fill: none; stroke-dasharray: 3 3; }
 .diagram .ah { fill: var(--ink); }
 .legend { display: flex; flex-wrap: wrap; gap: 16px; font-size: 0.85rem; color: var(--muted); justify-content: center; }
-.legend span::before { content: ""; display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; border: 1px solid var(--accent-ink); background: var(--ours); }
+.legend span::before { content: ""; display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; border: 1px solid var(--ours-line); background: var(--ours); }
 .legend span.b::before { background: var(--surface); border-color: var(--ink); }
-.cost { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
-@media (max-width: 760px) { .cost { grid-template-columns: 1fr; } }
-.cost > div { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; display: grid; gap: 4px; align-content: start; }
-.cost > div.mine { background: var(--ours); border-color: var(--accent-ink); }
-.cost .who { font-family: var(--f-mono); font-size: 0.72rem; color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; }
-.cost .what { font-family: var(--f-display); font-weight: 700; font-size: 1.08rem; line-height: 1.25; }
-.cost .eg { font-size: 0.88rem; color: var(--muted); }
+/* rows, as in the reference site's article list */
+.rows { display: grid; }
+.rows article { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 8px 24px; padding: 20px 16px; border-bottom: 1px solid var(--line); }
+@media (max-width: 640px) { .rows article { grid-template-columns: 1fr; } }
+.rows .cat { font-size: 0.85rem; color: var(--ink); display: flex; align-items: baseline; gap: 8px; }
+.rows .cat i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; flex: none; }
+.rows .cat small { display: block; color: var(--muted); font-size: 0.82rem; margin-top: 4px; }
+.rows h3 { font-size: 1.02rem; font-weight: 500; }
+.rows p { color: var(--muted); font-size: 0.88rem; margin-top: 4px; line-height: 1.5; }
 .player { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); gap: 22px; align-items: start; }
 @media (max-width: 760px) { .player { grid-template-columns: 1fr; } }
-.stages { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
-.stages button { width: 100%; text-align: left; font: inherit; font-size: 0.95rem; line-height: 1.3; color: var(--ink); background: transparent; border: 1px solid transparent; border-radius: 10px; padding: 8px 12px; cursor: pointer; display: grid; grid-template-columns: 2.2em 1fr; gap: 4px; }
-.stages button .n { font-family: var(--f-mono); color: var(--muted); font-size: 0.85rem; }
-.stages button:hover { border-color: var(--line); background: var(--surface); }
-.stages button[aria-pressed="true"] { background: var(--ours); border-color: var(--accent-ink); }
+.stages { list-style: none; margin: 0; padding: 0; display: grid; border-top: 1px solid var(--ink); }
+.stages button { width: 100%; text-align: left; font: inherit; font-size: 0.95rem; line-height: 1.35; color: var(--muted); background: transparent; border: 0; border-bottom: 1px solid var(--line); padding: 9px 8px; cursor: pointer; display: grid; grid-template-columns: 2.2em 1fr; gap: 4px; }
+.stages button .n { font-variant-numeric: tabular-nums; }
+.stages button:hover { color: var(--ink); }
+.stages button[aria-pressed="true"] { color: var(--ink); font-weight: 600; background: var(--ours); }
 .player figcaption { text-align: left; margin: 0; }
-.facts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+.facts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 22px 0; }
 @media (max-width: 760px) { .facts { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .facts > div { text-align: center; display: grid; gap: 2px; }
-.facts .v { font-family: var(--f-display); font-weight: 800; font-size: clamp(1.7rem, 1.2rem + 1.6vw, 2.5rem); font-stretch: 112%; font-variant-numeric: tabular-nums; line-height: 1.05; }
-.facts .l { font-size: 0.88rem; color: var(--muted); line-height: 1.3; }
-.own { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
-@media (max-width: 760px) { .own { grid-template-columns: 1fr; } }
-.own .col { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 20px 22px; display: grid; gap: 14px; align-content: start; box-shadow: var(--shadow); }
-.own .good { border-top: 4px solid var(--cool); } .own .bad { border-top: 4px solid var(--warm); }
-.own h3 { font-size: 1.2rem; }
-.own ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
-.own li { font-size: 1rem; line-height: 1.35; }
-.own li b { font-family: var(--f-display); font-weight: 650; }
-.own li span { display: block; font-family: var(--f-mono); font-size: 0.8rem; color: var(--muted); margin-top: 2px; }
-.cap { font-size: 0.9rem; color: var(--muted); text-align: center; max-width: 46em; margin: 0 auto; }
-.chart { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 18px; overflow-x: auto; }
+.facts .v { font-weight: 700; font-size: clamp(1.6rem, 1.2rem + 1.4vw, 2.3rem); font-variant-numeric: tabular-nums; line-height: 1.1; }
+.facts .l { font-size: 0.85rem; color: var(--muted); line-height: 1.35; }
+.chart { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 18px; overflow-x: auto; }
 .chart svg { width: 100%; min-width: 480px; height: auto; display: block; }
-.chart text { font-family: var(--f-mono); font-size: 11px; fill: var(--muted); }
-.chart .lbl { font-family: var(--f-display); font-size: 12px; fill: var(--ink); }
+.chart text { font-family: var(--f); font-size: 11px; fill: var(--muted); }
+.chart .lbl { font-size: 12.5px; fill: var(--ink); }
 .chart .grid { stroke: var(--line); }
 .chart .llm { fill: var(--warm); } .chart .mpc { fill: var(--cool); }
 .key { display: flex; gap: 18px; font-size: 0.85rem; color: var(--muted); flex-wrap: wrap; justify-content: center; }
@@ -129,44 +114,55 @@ figcaption b { color: var(--ink); font-weight: 600; }
 .latency { display: grid; gap: 10px; }
 .lat-row { display: grid; grid-template-columns: 10.5em 1fr 5.5em; gap: 10px; align-items: center; font-size: 0.9rem; }
 .lat-row .bar { height: 14px; border-radius: 3px; }
-.lat-row .v { font-family: var(--f-mono); text-align: right; font-size: 0.82rem; }
+.lat-row .v { text-align: right; font-size: 0.85rem; font-variant-numeric: tabular-nums; }
 @media (max-width: 520px) { .lat-row { grid-template-columns: 1fr 5em; } .lat-row .bar { grid-column: 1 / -1; grid-row: 2; } }
-.bars { display: grid; gap: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 18px; }
-.bars h3 { font-size: 0.95rem; }
+.bars { display: grid; gap: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 18px; }
+.bars h3 { font-size: 0.98rem; font-weight: 600; }
 .brow { display: grid; grid-template-columns: 11em 1fr 5em; gap: 10px; align-items: center; font-size: 0.9rem; }
 .brow .track { position: relative; height: 16px; }
 .brow .fill { position: absolute; inset: 0 auto 0 0; border-radius: 3px; min-width: 2px; }
-.brow .band { position: absolute; top: -4px; bottom: -4px; border-left: 1px dashed var(--muted); border-right: 1px dashed var(--muted); background: none; }
-.brow .v { font-family: var(--f-mono); font-size: 0.82rem; text-align: right; white-space: nowrap; }
+.brow .band { position: absolute; top: -4px; bottom: -4px; border-left: 1px dashed var(--muted); border-right: 1px dashed var(--muted); }
+.brow .v { font-size: 0.85rem; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
 @media (max-width: 520px) { .brow { grid-template-columns: 1fr 5em; } .brow .track { grid-column: 1 / -1; grid-row: 2; } }
-ul.plain { margin: 0 auto; padding-left: 1.1em; display: grid; gap: 6px; max-width: 46em; font-size: 0.95rem; color: var(--muted); }
-footer .inner { padding-block: 36px 56px; font-size: 0.9rem; color: var(--muted); gap: 8px; text-align: center; }
-@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+.connect { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 40px; align-items: center; padding-top: 56px; }
+@media (max-width: 760px) { .connect { grid-template-columns: 1fr; } }
+.connect h2 { text-align: left; font-size: 1.9rem; }
+.connect p { color: var(--muted); font-size: 1rem; }
+.btn { display: inline-block; border: 1px solid var(--ink); border-radius: 8px; padding: 8px 24px; color: var(--ink); font-weight: 600; font-size: 0.95rem; width: fit-content; transition: background .2s, color .2s; }
+.btn:hover { background: var(--ink); color: var(--bg); text-decoration: none; }
+.fine { color: var(--muted); font-size: 0.85rem; line-height: 1.55; border-top: 1px solid var(--line); margin-top: 48px; padding-top: 18px; display: grid; gap: 6px; }
+.fine ul { margin: 0; padding-left: 1.1em; display: grid; gap: 2px; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } .card video, .card img { transition: none; } }
 </style>
 </head>
 <body>
+<div class="container">
 
-<header class="hero"><div class="inner">
-  <span class="status">Ongoing work · results as of November 2026</span>
-  <h1>The agent <span class="y">authors</span> the skill.<br>Physics runs it.</h1>
-  <div class="byline">Changlin Song<span class="aff">Australian National University · with GE and the University of Pennsylvania</span></div>
-</div></header>
+<header class="top">
+  <a class="logo" href="https://charliesong1999.github.io/">Changlin Song</a>
+  <div class="right">
+    <a href="#study">Findings</a>
+    <span class="div"></span>
+    <button class="toggle" id="themeToggle" aria-label="Toggle dark mode"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 7a5 5 0 1 0 0 10 5 5 0 0 0 0-10zm0-5 1.5 3h-3L12 2zm0 20-1.5-3h3L12 22zM2 12l3-1.5v3L2 12zm20 0-3 1.5v-3l3 1.5zM4.9 4.9l3.2 1.1-2.1 2.1L4.9 4.9zm14.2 14.2-3.2-1.1 2.1-2.1 1.1 3.2zM4.9 19.1 6 15.9l2.1 2.1-3.2 1.1zM19.1 4.9 18 8.1 15.9 6l3.2-1.1z"/></svg></button>
+  </div>
+</header>
 
-<div class="inner" style="padding-block:8px 40px">
-  <figure>
-    <div class="frame"><video class="auto" src="static/videos/hero.mp4" poster="static/images/hero.jpg" autoplay muted loop playsinline preload="metadata"></video><span class="badge">real robot · 1× · outdoors</span></div>
-  </figure>
-  <p class="claim">A Boston Dynamics Spot rolls a water jug to a clicked goal, running a reward that <b>an LLM agent wrote</b>. No demonstrations, no per-task training, no motion capture.</p>
+<div class="mission">
+  <h1>The Agent Authors the Skill. Physics Runs It.</h1>
+  <p class="by">Changlin Song <span>· Australian National University · with GE and the University of Pennsylvania · ongoing work, November 2026</span></p>
+  <p>We want a legged robot that picks up new whole-body tasks quickly and works outside the lab. An LLM agent is too slow to be the control loop, so it writes the control program instead: a reward from a sentence and a few rounds of feedback. A physics-based sampling MPC then runs that reward 20 times a second on a Boston Dynamics Spot, with no demonstrations, no per-task training and no motion capture.</p>
 </div>
 
-<div class="band"><div class="inner">
-  <span class="kicker">The idea</span>
-  <h2>Too slow to drive. Fast enough to write the program.</h2>
-  <div class="strip">
-    <figure><div class="frame"><video class="auto" src="static/videos/barrel_final_8x.mp4" autoplay muted loop playsinline preload="metadata"></video></div><figcaption><b>The agent writes what "good" means.</b><span>Reward code from a sentence and feedback.</span></figcaption></figure>
-    <figure><div class="frame"><video class="auto" src="static/videos/rollouts.mp4" autoplay muted loop playsinline preload="metadata"></video></div><figcaption><b>Physics tries 24 futures, 20 times a second.</b><span>Sampling MPC in MuJoCo picks the best.</span></figcaption></figure>
-    <figure><div class="frame"><img src="static/images/pose_overlay.jpg" alt="Spot body camera view with the tracked jug outlined and its pose axes drawn." loading="lazy"></div><figcaption><b>The robot sees the object itself.</b><span>Onboard cameras replace motion capture.</span></figcaption></figure>
-  </div>
+<div class="banners">
+  <div class="card tall"><video class="auto" src="static/videos/hero.mp4" poster="static/images/hero.jpg" autoplay muted loop playsinline preload="metadata"></video><div class="t">Real robot, outdoors<small>Rolling a jug to a clicked goal on an agent-written reward · 1× speed</small></div></div>
+  <div class="card c6"><video class="auto" src="static/videos/barrel_final_8x.mp4" autoplay muted loop playsinline preload="metadata"></video><div class="t">The agent writes what "good" means</div></div>
+  <div class="card c4"><img src="static/images/pose_overlay.jpg" alt="Spot body camera view with the tracked jug outlined." loading="lazy"><div class="t">The robot sees the object itself</div></div>
+  <div class="card"><video class="auto" src="static/videos/rollouts.mp4" autoplay muted loop playsinline preload="metadata"></video><div class="t">Physics tries 24 futures, 20 times a second</div></div>
+</div>
+
+<section id="idea">
+  <h2>How It Works</h2>
+  <p class="sub">A slow loop where the agent writes, and a fast loop that never waits for it.</p>
   <figure>
     <div class="diagram" role="img" aria-label="Two loops. Slow loop: a text goal and feedback in words go to an LLM agent, which writes reward code. Fast loop: onboard cameras give the object pose to a sampling MPC in MuJoCo at 20 Hz, which commands a whole-body policy at 50 Hz on Spot. The reward runs inside the fast loop; run results go back to the agent.">
       <svg viewBox="0 0 1000 285" xmlns="http://www.w3.org/2000/svg">
@@ -208,17 +204,17 @@ footer .inner { padding-block: 36px 56px; font-size: 0.9rem; color: var(--muted)
     </div>
     <div class="legend"><span>my components</span><span class="b">from Sumo, deployed by me</span></div>
   </figure>
-  <div class="cost" aria-label="What a new task costs under three approaches">
-    <div><span class="who">End-to-end VLA</span><span class="what">New task = new demonstrations</span><span class="eg">teleoperate, then fine-tune</span></div>
-    <div><span class="who">One RL policy per skill</span><span class="what">New task = hours of training</span><span class="eg">write a reward, train in simulation</span></div>
-    <div class="mine"><span class="who">This project</span><span class="what">New task = a sentence and a few rounds of feedback</span><span class="eg">agent writes the reward, MPC runs it at once</span></div>
+  <div class="rows">
+    <hr class="rule">
+    <article><div class="cat"><i style="background:var(--muted)"></i><div>End-to-end VLA</div></div><div><h3>A new task needs new demonstrations</h3><p>Teleoperate, then fine-tune.</p></div></article>
+    <article><div class="cat"><i style="background:var(--muted)"></i><div>One RL policy per skill</div></div><div><h3>A new task needs hours of training</h3><p>Write a reward, then train in simulation.</p></div></article>
+    <article><div class="cat"><i style="background:var(--olive)"></i><div><b>This project</b></div></div><div><h3>A new task needs a sentence and a few rounds of feedback</h3><p>The agent writes the reward and the MPC runs it at once.</p></div></article>
   </div>
-</div></div>
+</section>
 
-<section id="step1"><div class="inner">
-  <span class="kicker"><span class="n">1</span>Foundation · real robot</span>
-  <h2>A whole-body pipeline that leaves the lab</h2>
-  <p class="claim"><b>Spot's own cameras</b> replace motion capture, so the planner's simulator stays in sync with the world outdoors. I built the deployment end to end.</p>
+<section id="step1">
+  <h2>A Pipeline That Leaves the Lab</h2>
+  <p class="sub"><b>Spot's own cameras</b> replace motion capture, so the planner's simulator stays in sync with the world outdoors. I built the deployment end to end.</p>
   <figure><div class="frame light"><img src="static/images/mocap_vs_ego.png" alt="Illustration: external optical motion capture covers only a calibrated volume; robot-mounted egocentric perception moves with the robot." loading="lazy"></div><figcaption>Illustration (AI-generated): capture coverage stays with the room; onboard perception moves with the robot.</figcaption></figure>
   <div class="two">
     <figure><div class="frame"><video class="auto" src="static/videos/onboard_rgbd.mp4" autoplay muted loop playsinline preload="metadata"></video></div><figcaption><b>Six onboard cameras</b> fused into one RGB-D scene.</figcaption></figure>
@@ -297,12 +293,11 @@ footer .inner { padding-block: 36px 56px; font-size: 0.9rem; color: var(--muted)
     <div class="frame"><video src="static/videos/real_demo.mp4" poster="static/images/real_demo.jpg" controls muted playsinline preload="none"></video></div>
     <figcaption><b>The full run</b> with the operator console (left) and the robot (right). Bystanders are blurred.</figcaption>
   </figure>
-</div></section>
+</section>
 
-<section class="band" id="step2"><div class="inner">
-  <span class="kicker"><span class="n">2</span>The agent as author</span>
-  <h2>A skill is a reward the agent writes</h2>
-  <p class="claim">The agent writes and debugs the reward. A person reviews it in plain words. Each revision is tested by rerunning the MPC, <b>with no retraining</b>.</p>
+<section id="step2">
+  <h2>A Skill Is a Reward the Agent Writes</h2>
+  <p class="sub">The agent writes and debugs the reward. A person reviews it in plain words. Each revision is tested by rerunning the MPC, <b>with no retraining</b>.</p>
   <div class="player">
     <figure>
       <div class="frame"><video id="stageVideo" class="auto" src="static/videos/stage_01-simple-move.mp4" poster="static/images/stage_01-simple-move.jpg" autoplay loop controls muted playsinline preload="metadata"></video></div>
@@ -316,31 +311,19 @@ footer .inner { padding-block: 36px 56px; font-size: 0.9rem; color: var(--muted)
     <div><span class="v">0.25 m</span><span class="l">final distance to goal</span></div>
     <div><span class="v">1 seed</span><span class="l">simulation, segmented run</span></div>
   </div>
-</div></section>
+</section>
 
-<section id="step3"><div class="inner">
-  <span class="kicker"><span class="n">3</span>Simulation study</span>
-  <h2>What should the agent own?</h2>
-  <p class="claim">I handed each stage of the pipeline to an LLM agent. It is good at <b>writing programs that run in the loop</b>, and inefficient at <b>being the loop</b>.</p>
-  <div class="own">
-    <div class="col good">
-      <h3>Agent does well</h3>
-      <ul>
-        <li><b>Writes and fixes the reward.</b><span>Real jug roll; 116&nbsp;kg barrel in simulation.</span></li>
-        <li><b>Writes its own control code</b> for the object, with or without MPC tools.<span>64 of 72 runs: pushes 32/32, uprights 32/40.</span></li>
-        <li><b>Hands hard contact to MPC</b> when MPC is offered as a tool.</li>
-      </ul>
-    </div>
-    <div class="col bad">
-      <h3>Better left to a tool</h3>
-      <ul>
-        <li><b>Being the fast loop.</b><span>LLM commands at 1&nbsp;Hz: 8 of 30. MPC at 20&nbsp;Hz: 28 of 30.</span></li>
-        <li><b>Rate matters even for MPC.</b><span>The same MPC at 1&nbsp;Hz: 16 of 30.</span></li>
-        <li><b>Walking from raw joint commands.</b><span>Only the newest models manage it, on some tasks. The 50&nbsp;Hz policy already does it.</span></li>
-      </ul>
-    </div>
+<section id="study">
+  <h2>What Should the Agent Own?</h2>
+  <p class="sub">In simulation I handed each stage of the pipeline to an LLM agent. It is good at <b>writing programs that run in the loop</b>, and inefficient at <b>being the loop</b>.</p>
+  <div class="rows">
+    <hr class="rule">
+    <article><div class="cat"><i style="background:var(--olive)"></i><div>Agent does well</div></div><div><h3>Writes and fixes the reward</h3><p>Real jug roll; 116&nbsp;kg barrel in simulation.</p></div></article>
+    <article><div class="cat"><i style="background:var(--olive)"></i><div>Agent does well</div></div><div><h3>Writes its own control code for the object, with or without MPC tools</h3><p>64 of 72 runs: pushes 32/32, uprights 32/40.</p></div></article>
+    <article><div class="cat"><i style="background:var(--olive)"></i><div>Agent does well</div></div><div><h3>Hands hard contact to MPC when MPC is offered as a tool</h3></div></article>
+    <article><div class="cat"><i style="background:var(--warm)"></i><div>Better left to a tool</div></div><div><h3>Being the fast loop</h3><p>LLM commands at 1&nbsp;Hz: 8 of 30. MPC at 20&nbsp;Hz: 28 of 30. The same MPC at 1&nbsp;Hz: 16 of 30.</p></div></article>
+    <article><div class="cat"><i style="background:var(--warm)"></i><div>Better left to a tool</div></div><div><h3>Walking from raw joint commands</h3><p>Only the newest models manage it, on some tasks. The 50&nbsp;Hz policy already does it.</p></div></article>
   </div>
-  <p class="cap">MuJoCo, privileged state, Sumo's tasks. Agent runs had no time limit; the three-way comparison shares 30 start states.</p>
   <div class="two">
     <figure>
       <div class="chart"><svg id="taskChart" viewBox="0 0 560 330" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Per-task success, LLM versus 1 Hz MPC, on the same initial states"></svg></div>
@@ -352,34 +335,38 @@ footer .inner { padding-block: 36px 56px; font-size: 0.9rem; color: var(--muted)
       <figcaption><b>Three clocks</b> (log scale): an LLM call takes seconds, MPC replans every 50&nbsp;ms.</figcaption>
     </figure>
   </div>
-</div></section>
+</section>
 
-<section class="band" id="together"><div class="inner">
-  <span class="kicker">Outlook · not a result yet</span>
-  <h2>The same stack as a data engine</h2>
-  <p class="claim">Skills the agent authors and MPC executes produce <b>robot data with no human demonstrations</b>, which can later train RL or VLA policies that run fully onboard.</p>
-  <div class="cost" aria-label="Related work">
-    <div><span class="who">Baseline</span><span class="what"><a href="https://arxiv.org/abs/2604.08508">Sumo</a></span><span class="eg">sampling MPC over an RL policy; hand-written rewards, motion capture</span></div>
-    <div><span class="who">Closest idea</span><span class="what"><a href="https://arxiv.org/abs/2306.08647">Language to Rewards</a></span><span class="eg">LLM writes MPC rewards; quadruped in simulation only</span></div>
-    <div><span class="who">Other route outdoors</span><span class="what"><a href="https://rai-inst.com/resources/blog/whole-body-manipulation-outside-the-lab/">RAI: RL per skill</a></span><span class="eg">trained policies from depth; hours of training per skill</span></div>
+<section id="together">
+  <h2>Outlook: a Data Engine</h2>
+  <p class="sub">Not a result yet. Skills the agent authors and MPC executes produce <b>robot data with no human demonstrations</b>, which can later train RL or VLA policies that run fully onboard.</p>
+  <div class="rows">
+    <hr class="rule">
+    <article><div class="cat"><i style="background:var(--muted)"></i><div>Baseline</div></div><div><h3><a href="https://arxiv.org/abs/2604.08508">Sumo</a></h3><p>Sampling MPC over an RL policy; hand-written rewards, motion capture.</p></div></article>
+    <article><div class="cat"><i style="background:var(--muted)"></i><div>Closest idea</div></div><div><h3><a href="https://arxiv.org/abs/2306.08647">Language to Rewards</a></h3><p>An LLM writes MPC rewards; quadruped in simulation only.</p></div></article>
+    <article><div class="cat"><i style="background:var(--muted)"></i><div>Other route outdoors</div></div><div><h3><a href="https://rai-inst.com/resources/blog/whole-body-manipulation-outside-the-lab/">RAI: one RL policy per skill</a></h3><p>Trained policies from depth; hours of training per skill.</p></div></article>
   </div>
-</div></section>
+</section>
 
-<section id="limits"><div class="inner" style="padding-block:44px 20px; gap:14px">
-  <span class="kicker">Scope</span>
-  <ul class="plain">
+<div class="connect">
+  <div class="frame"><img src="static/images/hero.jpg" alt="Spot rolling a water jug on grass" loading="lazy"></div>
+  <div style="display:grid; gap:16px">
+    <h2>Let's Connect</h2>
+    <p>This is ongoing work. If you are interested in agents for robot control, or in whole-body manipulation outside the lab, I would be glad to talk.</p>
+    <a class="btn" href="https://charliesong1999.github.io/">Contact</a>
+  </div>
+</div>
+
+<div class="fine">
+  <ul>
     <li>"No training" means per task: the whole-body policy is a pretrained RL policy from Sumo, and the object needs a known mesh.</li>
     <li>Perception and MPC run on an off-board workstation; only the whole-body policy runs on the robot.</li>
-    <li>Barrel push: one seed, segmented simulation, uncalibrated water dynamics.</li>
-    <li>Agent study: simulation with privileged state; single runs per condition for the newest models.</li>
+    <li>Barrel push: one seed, segmented simulation, uncalibrated water dynamics. Agent study: simulation with privileged state; agent runs had no time limit.</li>
   </ul>
-</div></section>
-
-<footer><div class="inner">
   <div>Built on <a href="https://arxiv.org/abs/2604.08508">Sumo</a> (Zhang et al., 2026) and its Judo MPC framework, <a href="https://github.com/NVlabs/FoundationPose">FoundationPose</a>, and SAM 3. Thanks to collaborators at GE and the University of Pennsylvania.</div>
-  <div>Changlin Song · <a href="https://charliesong1999.github.io/">charliesong1999.github.io</a></div>
-</div></footer>
+</div>
 
+</div>
 <script>
 (function () {
   var stages = [
@@ -446,6 +433,12 @@ footer .inner { padding-block: 36px 56px; font-size: 0.9rem; color: var(--muted)
     var io = new IntersectionObserver(function (es) { es.forEach(function (e) { if (e.isIntersecting) { var p = e.target.play(); if (p && p.catch) p.catch(function () {}); } else e.target.pause(); }); }, { threshold: 0.15 });
     Array.prototype.forEach.call(document.querySelectorAll("video.auto"), function (v) { io.observe(v); });
   }
+  var tg = document.getElementById("themeToggle");
+  if (tg) tg.addEventListener("click", function () {
+    var r = document.documentElement, cur = r.getAttribute("data-theme") || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    var nx = cur === "dark" ? "light" : "dark"; r.setAttribute("data-theme", nx);
+    try { localStorage.setItem("theme", nx); } catch (e) {}
+  });
 })();
 </script>
 </body>
