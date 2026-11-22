@@ -1,0 +1,452 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Spot Loco-Manipulation Stack</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="An LLM agent authors whole-body skills for a Boston Dynamics Spot; a physics-based sampling MPC runs them outdoors with no demonstrations and no per-task training.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,400..800&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: centered project page. Full-bleed alternating bands; media up to 1080px, text up to 720px. Spot yellow is the single accent. */
+:root {
+  --bg: #ffffff; --band: #f4f5f2; --surface: #ffffff; --ink: #15181c; --muted: #5c656d; --line: #e2e4df;
+  --accent: #f2bb0d; --accent-ink: #8a6500; --ours: #fff3c4; --cool: #2b6f93; --warm: #c9541a;
+  --shadow: 0 1px 2px rgba(20,24,28,.06), 0 12px 32px -12px rgba(20,24,28,.22);
+  --f-display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --f-body: "Source Sans 3", "Helvetica Neue", Arial, sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1113; --band: #16191c; --surface: #1b1f23; --ink: #eceeea; --muted: #a3aab0; --line: #2d3339;
+    --accent: #f5c531; --accent-ink: #f5cf5a; --ours: #3b3314; --cool: #74b6d6; --warm: #f08c55;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 12px 32px -12px rgba(0,0,0,.7);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1113; --band: #16191c; --surface: #1b1f23; --ink: #eceeea; --muted: #a3aab0; --line: #2d3339;
+  --accent: #f5c531; --accent-ink: #f5cf5a; --ours: #3b3314; --cool: #74b6d6; --warm: #f08c55;
+  --shadow: 0 1px 2px rgba(0,0,0,.4), 0 12px 32px -12px rgba(0,0,0,.7);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 18px/1.55 var(--f-body); }
+img, video { max-width: 100%; display: block; }
+a { color: inherit; text-decoration-color: var(--accent); text-decoration-thickness: 2px; text-underline-offset: 3px; }
+a:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.band { background: var(--band); }
+.inner { max-width: 1112px; margin: 0 auto; padding-block: 64px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; gap: 28px; justify-items: center; }
+.inner > * { width: 100%; min-width: 0; }
+.narrow { max-width: 760px; }
+h1, h2, h3 { font-family: var(--f-display); text-wrap: balance; line-height: 1.1; margin: 0; }
+h1 { font-size: clamp(2.2rem, 1.2rem + 4.4vw, 4.2rem); font-weight: 800; font-stretch: 116%; letter-spacing: -0.025em; text-align: center; }
+h1 .y { box-shadow: inset 0 -0.26em 0 var(--accent); }
+h2 { font-size: clamp(1.6rem, 1.2rem + 1.6vw, 2.3rem); font-weight: 750; font-stretch: 110%; letter-spacing: -0.015em; text-align: center; }
+h3 { font-size: 1.05rem; font-weight: 700; }
+p { margin: 0; }
+.mono { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+.hero .inner { padding-block: 56px 28px; gap: 16px; }
+.status { display: inline-flex; align-items: center; gap: 8px; font-family: var(--f-mono); font-size: 0.74rem; border: 1px solid var(--line); border-radius: 999px; padding: 4px 12px; width: fit-content; background: var(--surface); }
+.status::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+.byline { font-family: var(--f-display); font-size: 1.05rem; text-align: center; }
+.byline .aff { color: var(--muted); display: block; font-size: 0.95rem; margin-top: 2px; }
+.claim { font-size: clamp(1.15rem, 1rem + 0.7vw, 1.4rem); line-height: 1.42; text-align: center; max-width: 34em; text-wrap: balance; color: var(--ink); }
+.claim b { font-weight: 600; box-shadow: inset 0 -0.28em 0 var(--accent); }
+.kicker { display: inline-flex; align-items: center; gap: 10px; font-family: var(--f-mono); font-size: 0.74rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); width: fit-content; }
+.kicker .n { background: var(--accent); color: #15181c; border-radius: 999px; width: 1.9em; height: 1.9em; display: grid; place-items: center; font-weight: 600; letter-spacing: 0; }
+figure { margin: 0; display: grid; gap: 10px; }
+figcaption { font-size: 0.92rem; color: var(--muted); text-align: center; max-width: 46em; margin: 0 auto; }
+figcaption b { color: var(--ink); font-weight: 600; }
+.frame { position: relative; border-radius: 14px; overflow: hidden; background: #000; box-shadow: var(--shadow); }
+.frame video, .frame img { width: 100%; height: auto; }
+.frame.light { background: #fff; }
+.badge { position: absolute; left: 12px; top: 12px; font-family: var(--f-mono); font-size: 0.72rem; background: rgba(15,17,19,.72); color: #fff; padding: 3px 9px; border-radius: 999px; }
+.strip { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+@media (max-width: 760px) { .strip { grid-template-columns: 1fr; } }
+.strip .frame { aspect-ratio: 4 / 3; }
+.strip .frame video, .strip .frame img { width: 100%; height: 100%; object-fit: cover; }
+.strip figcaption { text-align: left; margin: 0; font-size: 0.98rem; color: var(--ink); }
+.strip figcaption span { display: block; color: var(--muted); font-size: 0.88rem; }
+.two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px; align-items: start; }
+@media (max-width: 760px) { .two { grid-template-columns: 1fr; } }
+.diagram { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px; }
+.diagram svg { min-width: 760px; width: 100%; height: auto; display: block; }
+.diagram text { font-family: var(--f-display); fill: var(--ink); }
+.diagram .sm { font-family: var(--f-mono); font-size: 11px; fill: var(--muted); }
+.diagram .box { fill: var(--surface); stroke: var(--ink); stroke-width: 1.4; }
+.diagram .ours { fill: var(--ours); stroke: var(--accent-ink); stroke-width: 1.4; }
+.diagram .zone { fill: none; stroke: var(--line); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.diagram .arr { stroke: var(--ink); stroke-width: 1.4; fill: none; }
+.diagram .link { stroke: var(--muted); stroke-width: 1.4; fill: none; stroke-dasharray: 3 3; }
+.diagram .ah { fill: var(--ink); }
+.legend { display: flex; flex-wrap: wrap; gap: 16px; font-size: 0.85rem; color: var(--muted); justify-content: center; }
+.legend span::before { content: ""; display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; border: 1px solid var(--accent-ink); background: var(--ours); }
+.legend span.b::before { background: var(--surface); border-color: var(--ink); }
+.cost { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+@media (max-width: 760px) { .cost { grid-template-columns: 1fr; } }
+.cost > div { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; display: grid; gap: 4px; align-content: start; }
+.cost > div.mine { background: var(--ours); border-color: var(--accent-ink); }
+.cost .who { font-family: var(--f-mono); font-size: 0.72rem; color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; }
+.cost .what { font-family: var(--f-display); font-weight: 700; font-size: 1.08rem; line-height: 1.25; }
+.cost .eg { font-size: 0.88rem; color: var(--muted); }
+.player { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); gap: 22px; align-items: start; }
+@media (max-width: 760px) { .player { grid-template-columns: 1fr; } }
+.stages { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.stages button { width: 100%; text-align: left; font: inherit; font-size: 0.95rem; line-height: 1.3; color: var(--ink); background: transparent; border: 1px solid transparent; border-radius: 10px; padding: 8px 12px; cursor: pointer; display: grid; grid-template-columns: 2.2em 1fr; gap: 4px; }
+.stages button .n { font-family: var(--f-mono); color: var(--muted); font-size: 0.85rem; }
+.stages button:hover { border-color: var(--line); background: var(--surface); }
+.stages button[aria-pressed="true"] { background: var(--ours); border-color: var(--accent-ink); }
+.player figcaption { text-align: left; margin: 0; }
+.facts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+@media (max-width: 760px) { .facts { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.facts > div { text-align: center; display: grid; gap: 2px; }
+.facts .v { font-family: var(--f-display); font-weight: 800; font-size: clamp(1.7rem, 1.2rem + 1.6vw, 2.5rem); font-stretch: 112%; font-variant-numeric: tabular-nums; line-height: 1.05; }
+.facts .l { font-size: 0.88rem; color: var(--muted); line-height: 1.3; }
+.own { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+@media (max-width: 760px) { .own { grid-template-columns: 1fr; } }
+.own .col { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 20px 22px; display: grid; gap: 14px; align-content: start; box-shadow: var(--shadow); }
+.own .good { border-top: 4px solid var(--cool); } .own .bad { border-top: 4px solid var(--warm); }
+.own h3 { font-size: 1.2rem; }
+.own ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.own li { font-size: 1rem; line-height: 1.35; }
+.own li b { font-family: var(--f-display); font-weight: 650; }
+.own li span { display: block; font-family: var(--f-mono); font-size: 0.8rem; color: var(--muted); margin-top: 2px; }
+.cap { font-size: 0.9rem; color: var(--muted); text-align: center; max-width: 46em; margin: 0 auto; }
+.chart { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 18px; overflow-x: auto; }
+.chart svg { width: 100%; min-width: 480px; height: auto; display: block; }
+.chart text { font-family: var(--f-mono); font-size: 11px; fill: var(--muted); }
+.chart .lbl { font-family: var(--f-display); font-size: 12px; fill: var(--ink); }
+.chart .grid { stroke: var(--line); }
+.chart .llm { fill: var(--warm); } .chart .mpc { fill: var(--cool); }
+.key { display: flex; gap: 18px; font-size: 0.85rem; color: var(--muted); flex-wrap: wrap; justify-content: center; }
+.key i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+.latency { display: grid; gap: 10px; }
+.lat-row { display: grid; grid-template-columns: 10.5em 1fr 5.5em; gap: 10px; align-items: center; font-size: 0.9rem; }
+.lat-row .bar { height: 14px; border-radius: 3px; }
+.lat-row .v { font-family: var(--f-mono); text-align: right; font-size: 0.82rem; }
+@media (max-width: 520px) { .lat-row { grid-template-columns: 1fr 5em; } .lat-row .bar { grid-column: 1 / -1; grid-row: 2; } }
+.bars { display: grid; gap: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 18px; }
+.bars h3 { font-size: 0.95rem; }
+.brow { display: grid; grid-template-columns: 11em 1fr 5em; gap: 10px; align-items: center; font-size: 0.9rem; }
+.brow .track { position: relative; height: 16px; }
+.brow .fill { position: absolute; inset: 0 auto 0 0; border-radius: 3px; min-width: 2px; }
+.brow .band { position: absolute; top: -4px; bottom: -4px; border-left: 1px dashed var(--muted); border-right: 1px dashed var(--muted); background: none; }
+.brow .v { font-family: var(--f-mono); font-size: 0.82rem; text-align: right; white-space: nowrap; }
+@media (max-width: 520px) { .brow { grid-template-columns: 1fr 5em; } .brow .track { grid-column: 1 / -1; grid-row: 2; } }
+ul.plain { margin: 0 auto; padding-left: 1.1em; display: grid; gap: 6px; max-width: 46em; font-size: 0.95rem; color: var(--muted); }
+footer .inner { padding-block: 36px 56px; font-size: 0.9rem; color: var(--muted); gap: 8px; text-align: center; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+</style>
+</head>
+<body>
+
+<header class="hero"><div class="inner">
+  <span class="status">Ongoing work · results as of November 2026</span>
+  <h1>The agent <span class="y">authors</span> the skill.<br>Physics runs it.</h1>
+  <div class="byline">Changlin Song<span class="aff">Australian National University · with GE and the University of Pennsylvania</span></div>
+</div></header>
+
+<div class="inner" style="padding-block:8px 40px">
+  <figure>
+    <div class="frame"><video class="auto" src="static/videos/hero.mp4" poster="static/images/hero.jpg" autoplay muted loop playsinline preload="metadata"></video><span class="badge">real robot · 1× · outdoors</span></div>
+  </figure>
+  <p class="claim">A Boston Dynamics Spot rolls a water jug to a clicked goal, running a reward that <b>an LLM agent wrote</b>. No demonstrations, no per-task training, no motion capture.</p>
+</div>
+
+<div class="band"><div class="inner">
+  <span class="kicker">The idea</span>
+  <h2>Too slow to drive. Fast enough to write the program.</h2>
+  <div class="strip">
+    <figure><div class="frame"><video class="auto" src="static/videos/barrel_final_8x.mp4" autoplay muted loop playsinline preload="metadata"></video></div><figcaption><b>The agent writes what "good" means.</b><span>Reward code from a sentence and feedback.</span></figcaption></figure>
+    <figure><div class="frame"><video class="auto" src="static/videos/rollouts.mp4" autoplay muted loop playsinline preload="metadata"></video></div><figcaption><b>Physics tries 24 futures, 20 times a second.</b><span>Sampling MPC in MuJoCo picks the best.</span></figcaption></figure>
+    <figure><div class="frame"><img src="static/images/pose_overlay.jpg" alt="Spot body camera view with the tracked jug outlined and its pose axes drawn." loading="lazy"></div><figcaption><b>The robot sees the object itself.</b><span>Onboard cameras replace motion capture.</span></figcaption></figure>
+  </div>
+  <figure>
+    <div class="diagram" role="img" aria-label="Two loops. Slow loop: a text goal and feedback in words go to an LLM agent, which writes reward code. Fast loop: onboard cameras give the object pose to a sampling MPC in MuJoCo at 20 Hz, which commands a whole-body policy at 50 Hz on Spot. The reward runs inside the fast loop; run results go back to the agent.">
+      <svg viewBox="0 0 1000 285" xmlns="http://www.w3.org/2000/svg">
+        <defs><marker id="ah2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ah"/></marker></defs>
+        <rect class="zone" x="10" y="14" width="980" height="108" rx="8"/>
+        <text x="26" y="36" class="sm">SLOW LOOP · WHEN A TASK IS NEW OR A RUN FAILS</text>
+        <rect class="box" x="30" y="50" width="220" height="58" rx="5"/>
+        <text x="44" y="74" font-size="13" font-weight="600">Text goal + feedback</text>
+        <text x="44" y="94" class="sm">"do it gently"</text>
+        <rect class="ours" x="310" y="50" width="180" height="58" rx="5"/>
+        <text x="324" y="74" font-size="13" font-weight="600">LLM agent</text>
+        <text x="324" y="94" class="sm">reads code and results</text>
+        <rect class="ours" x="550" y="50" width="200" height="58" rx="5"/>
+        <text x="564" y="74" font-size="13" font-weight="600">Reward code</text>
+        <text x="564" y="94" class="sm">the skill, as a program</text>
+        <path class="arr" d="M250 79 H310" marker-end="url(#ah2)"/>
+        <path class="arr" d="M490 79 H550" marker-end="url(#ah2)"/>
+        <path class="arr" d="M650 108 V146 H455 V186" marker-end="url(#ah2)"/>
+        <text x="662" y="142" class="sm">scored on every plan</text>
+        <path class="link" d="M400 186 V108" marker-end="url(#ah2)"/>
+        <text x="390" y="150" class="sm" text-anchor="end">what happened</text>
+        <rect class="zone" x="10" y="160" width="980" height="112" rx="8"/>
+        <text x="26" y="262" class="sm">FAST LOOP · NEVER WAITS FOR THE AGENT</text>
+        <rect class="ours" x="30" y="186" width="240" height="58" rx="5"/>
+        <text x="44" y="210" font-size="13" font-weight="600">Onboard cameras → object pose</text>
+        <text x="44" y="230" class="sm">SAM 3 + FoundationPose</text>
+        <rect class="box" x="330" y="186" width="250" height="58" rx="5"/>
+        <text x="344" y="210" font-size="13" font-weight="600">Sampling MPC in MuJoCo</text>
+        <text x="344" y="230" class="sm">24 rollouts · 20 Hz</text>
+        <rect class="box" x="640" y="186" width="180" height="58" rx="5"/>
+        <text x="654" y="210" font-size="13" font-weight="600">Whole-body policy</text>
+        <text x="654" y="230" class="sm">pretrained RL · 50 Hz</text>
+        <rect class="box" x="880" y="186" width="96" height="58" rx="5"/>
+        <text x="894" y="220" font-size="13" font-weight="600">Spot</text>
+        <path class="arr" d="M270 215 H330" marker-end="url(#ah2)"/>
+        <path class="arr" d="M580 215 H640" marker-end="url(#ah2)"/>
+        <path class="arr" d="M820 215 H880" marker-end="url(#ah2)"/>
+      </svg>
+    </div>
+    <div class="legend"><span>my components</span><span class="b">from Sumo, deployed by me</span></div>
+  </figure>
+  <div class="cost" aria-label="What a new task costs under three approaches">
+    <div><span class="who">End-to-end VLA</span><span class="what">New task = new demonstrations</span><span class="eg">teleoperate, then fine-tune</span></div>
+    <div><span class="who">One RL policy per skill</span><span class="what">New task = hours of training</span><span class="eg">write a reward, train in simulation</span></div>
+    <div class="mine"><span class="who">This project</span><span class="what">New task = a sentence and a few rounds of feedback</span><span class="eg">agent writes the reward, MPC runs it at once</span></div>
+  </div>
+</div></div>
+
+<section id="step1"><div class="inner">
+  <span class="kicker"><span class="n">1</span>Foundation · real robot</span>
+  <h2>A whole-body pipeline that leaves the lab</h2>
+  <p class="claim"><b>Spot's own cameras</b> replace motion capture, so the planner's simulator stays in sync with the world outdoors. I built the deployment end to end.</p>
+  <figure><div class="frame light"><img src="static/images/mocap_vs_ego.png" alt="Illustration: external optical motion capture covers only a calibrated volume; robot-mounted egocentric perception moves with the robot." loading="lazy"></div><figcaption>Illustration (AI-generated): capture coverage stays with the room; onboard perception moves with the robot.</figcaption></figure>
+  <div class="two">
+    <figure><div class="frame"><video class="auto" src="static/videos/onboard_rgbd.mp4" autoplay muted loop playsinline preload="metadata"></video></div><figcaption><b>Six onboard cameras</b> fused into one RGB-D scene.</figcaption></figure>
+    <figure><div class="frame light"><img src="static/images/ppt_32.png" alt="Multi-view FoundationPose: shared pose candidates scored in every camera and aggregated." loading="lazy"></div><figcaption><b>Multi-view 6-DoF tracking</b> with SAM&nbsp;3 and FoundationPose.</figcaption></figure>
+  </div>
+  <figure>
+    <div class="diagram" role="img" aria-label="Deployment diagram: camera images go from Spot over Wi-Fi to a workstation running perception and MPC; the workstation sends a 10-dimensional high-level command over Wi-Fi to an onboard Jetson running the whole-body policy at 50 Hz, which sends joint commands to the Spot SDK over Ethernet and ROS 2.">
+      <svg viewBox="0 0 1060 330" xmlns="http://www.w3.org/2000/svg">
+        <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ah"/></marker></defs>
+        <rect class="zone" x="10" y="20" width="560" height="290" rx="8"/>
+        <text x="26" y="44" font-size="14" font-weight="700">Workstation · NVIDIA RTX PRO 6000</text>
+        <rect class="zone" x="640" y="20" width="410" height="290" rx="8"/>
+        <text x="656" y="44" font-size="14" font-weight="700">On the robot</text>
+
+        <rect class="box" x="30" y="66" width="170" height="58" rx="5"/>
+        <text x="44" y="90" font-size="13" font-weight="600">Goal</text>
+        <text x="44" y="110" class="sm">operator click / task</text>
+
+        <rect class="ours" x="30" y="150" width="240" height="70" rx="5"/>
+        <text x="44" y="174" font-size="13" font-weight="600">Egocentric perception</text>
+        <text x="44" y="194" class="sm">SAM 3 mask → FoundationPose</text>
+        <text x="44" y="210" class="sm">multi-view 6-DoF object pose</text>
+
+        <rect class="ours" x="230" y="66" width="160" height="58" rx="5"/>
+        <text x="244" y="90" font-size="13" font-weight="600">Reward</text>
+        <text x="244" y="110" class="sm">agent-written code</text>
+
+        <rect class="box" x="300" y="150" width="250" height="70" rx="5"/>
+        <text x="314" y="174" font-size="13" font-weight="600">Sampling MPC (Sumo)</text>
+        <text x="314" y="194" class="sm">MuJoCo synced to perception</text>
+        <text x="314" y="210" class="sm">24 rollouts × 2 s · 20 Hz</text>
+
+        <rect class="ours" x="300" y="246" width="250" height="48" rx="5"/>
+        <text x="314" y="266" font-size="12" font-weight="600">LLM-planner experiments</text>
+        <text x="314" y="284" class="sm">replace / steer the MPC</text>
+
+        <rect class="box" x="660" y="66" width="170" height="58" rx="5"/>
+        <text x="674" y="90" font-size="13" font-weight="600">Cameras</text>
+        <text x="674" y="110" class="sm">body + hand RGB-D</text>
+
+        <rect class="box" x="660" y="150" width="200" height="70" rx="5"/>
+        <text x="674" y="174" font-size="13" font-weight="600">Jetson Orin / Thor</text>
+        <text x="674" y="194" class="sm">whole-body RL policy</text>
+        <text x="674" y="210" class="sm">84 → 12 leg targets · 50 Hz</text>
+
+        <rect class="box" x="900" y="150" width="130" height="70" rx="5"/>
+        <text x="914" y="174" font-size="13" font-weight="600">Spot SDK</text>
+        <text x="914" y="194" class="sm">19 joint</text>
+        <text x="914" y="210" class="sm">commands</text>
+
+        <path class="arr" d="M105 124 V150" marker-end="url(#ah)"/>
+        <path class="arr" d="M200 95 H230" marker-end="url(#ah)"/>
+        <path class="arr" d="M330 124 V150" marker-end="url(#ah)"/>
+        <path class="arr" d="M270 185 H300" marker-end="url(#ah)"/>
+        <path class="arr" d="M425 246 V220" marker-end="url(#ah)"/>
+        <path class="link" d="M745 124 V139 H240 V150" marker-end="url(#ah)"/>
+        <text x="560" y="133" class="sm">images · Wi-Fi</text>
+        <path class="link" d="M550 185 H660" marker-end="url(#ah)"/>
+        <text x="566" y="178" class="sm">10-D command</text>
+        <text x="566" y="204" class="sm">Wi-Fi</text>
+        <path class="arr" d="M860 185 H900" marker-end="url(#ah)"/>
+        <text x="866" y="244" class="sm">Ethernet · ROS 2</text>
+      </svg>
+    </div>
+    <div class="legend"><span>my components</span><span class="b">existing models and hardware, integrated by me</span></div>
+  </figure>
+  <figure class="narrow">
+    <div class="bars">
+      <h3>Object position bias fed to the planner</h3>
+      <div class="brow"><span>World frame, SLAM in loop</span><span class="track"><span class="band" style="left:28.6%;width:14.3%"></span><span class="fill" style="width:90%;background:var(--warm)"></span></span><span class="v">6.3 cm</span></div>
+      <div class="brow"><span>Robot frame (used)</span><span class="track"><span class="band" style="left:28.6%;width:14.3%"></span><span class="fill" style="width:9.1%;background:var(--cool)"></span></span><span class="v">0.64 cm</span></div>
+    </div>
+    <figcaption>Dashed band: the 2–3&nbsp;cm bias the MPC tolerates. One HOT3D test clip.</figcaption>
+  </figure>
+  <figure>
+    <div class="frame"><video src="static/videos/real_demo.mp4" poster="static/images/real_demo.jpg" controls muted playsinline preload="none"></video></div>
+    <figcaption><b>The full run</b> with the operator console (left) and the robot (right). Bystanders are blurred.</figcaption>
+  </figure>
+</div></section>
+
+<section class="band" id="step2"><div class="inner">
+  <span class="kicker"><span class="n">2</span>The agent as author</span>
+  <h2>A skill is a reward the agent writes</h2>
+  <p class="claim">The agent writes and debugs the reward. A person reviews it in plain words. Each revision is tested by rerunning the MPC, <b>with no retraining</b>.</p>
+  <div class="player">
+    <figure>
+      <div class="frame"><video id="stageVideo" class="auto" src="static/videos/stage_01-simple-move.mp4" poster="static/images/stage_01-simple-move.jpg" autoplay loop controls muted playsinline preload="metadata"></video></div>
+      <figcaption id="stageCaption"></figcaption>
+    </figure>
+    <ol class="stages" id="stages"></ol>
+  </div>
+  <div class="facts">
+    <div><span class="v">9</span><span class="l">rounds of feedback in words</span></div>
+    <div><span class="v">116 kg</span><span class="l">barrel with half-fill water load</span></div>
+    <div><span class="v">0.25 m</span><span class="l">final distance to goal</span></div>
+    <div><span class="v">1 seed</span><span class="l">simulation, segmented run</span></div>
+  </div>
+</div></section>
+
+<section id="step3"><div class="inner">
+  <span class="kicker"><span class="n">3</span>Simulation study</span>
+  <h2>What should the agent own?</h2>
+  <p class="claim">I handed each stage of the pipeline to an LLM agent. It is good at <b>writing programs that run in the loop</b>, and inefficient at <b>being the loop</b>.</p>
+  <div class="own">
+    <div class="col good">
+      <h3>Agent does well</h3>
+      <ul>
+        <li><b>Writes and fixes the reward.</b><span>Real jug roll; 116&nbsp;kg barrel in simulation.</span></li>
+        <li><b>Writes its own control code</b> for the object, with or without MPC tools.<span>64 of 72 runs: pushes 32/32, uprights 32/40.</span></li>
+        <li><b>Hands hard contact to MPC</b> when MPC is offered as a tool.</li>
+      </ul>
+    </div>
+    <div class="col bad">
+      <h3>Better left to a tool</h3>
+      <ul>
+        <li><b>Being the fast loop.</b><span>LLM commands at 1&nbsp;Hz: 8 of 30. MPC at 20&nbsp;Hz: 28 of 30.</span></li>
+        <li><b>Rate matters even for MPC.</b><span>The same MPC at 1&nbsp;Hz: 16 of 30.</span></li>
+        <li><b>Walking from raw joint commands.</b><span>Only the newest models manage it, on some tasks. The 50&nbsp;Hz policy already does it.</span></li>
+      </ul>
+    </div>
+  </div>
+  <p class="cap">MuJoCo, privileged state, Sumo's tasks. Agent runs had no time limit; the three-way comparison shares 30 start states.</p>
+  <div class="two">
+    <figure>
+      <div class="chart"><svg id="taskChart" viewBox="0 0 560 330" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Per-task success, LLM versus 1 Hz MPC, on the same initial states"></svg></div>
+      <div class="key"><span><i style="background:var(--warm)"></i>LLM issues commands, 1 Hz</span><span><i style="background:var(--cool)"></i>Sumo MPC, 1 Hz</span></div>
+      <figcaption><b>Same rate, same 71 start states:</b> 19 vs 34 successes.</figcaption>
+    </figure>
+    <figure>
+      <div class="chart"><div class="latency" id="latency"></div></div>
+      <figcaption><b>Three clocks</b> (log scale): an LLM call takes seconds, MPC replans every 50&nbsp;ms.</figcaption>
+    </figure>
+  </div>
+</div></section>
+
+<section class="band" id="together"><div class="inner">
+  <span class="kicker">Outlook · not a result yet</span>
+  <h2>The same stack as a data engine</h2>
+  <p class="claim">Skills the agent authors and MPC executes produce <b>robot data with no human demonstrations</b>, which can later train RL or VLA policies that run fully onboard.</p>
+  <div class="cost" aria-label="Related work">
+    <div><span class="who">Baseline</span><span class="what"><a href="https://arxiv.org/abs/2604.08508">Sumo</a></span><span class="eg">sampling MPC over an RL policy; hand-written rewards, motion capture</span></div>
+    <div><span class="who">Closest idea</span><span class="what"><a href="https://arxiv.org/abs/2306.08647">Language to Rewards</a></span><span class="eg">LLM writes MPC rewards; quadruped in simulation only</span></div>
+    <div><span class="who">Other route outdoors</span><span class="what"><a href="https://rai-inst.com/resources/blog/whole-body-manipulation-outside-the-lab/">RAI: RL per skill</a></span><span class="eg">trained policies from depth; hours of training per skill</span></div>
+  </div>
+</div></section>
+
+<section id="limits"><div class="inner" style="padding-block:44px 20px; gap:14px">
+  <span class="kicker">Scope</span>
+  <ul class="plain">
+    <li>"No training" means per task: the whole-body policy is a pretrained RL policy from Sumo, and the object needs a known mesh.</li>
+    <li>Perception and MPC run on an off-board workstation; only the whole-body policy runs on the robot.</li>
+    <li>Barrel push: one seed, segmented simulation, uncalibrated water dynamics.</li>
+    <li>Agent study: simulation with privileged state; single runs per condition for the newest models.</li>
+  </ul>
+</div></section>
+
+<footer><div class="inner">
+  <div>Built on <a href="https://arxiv.org/abs/2604.08508">Sumo</a> (Zhang et al., 2026) and its Judo MPC framework, <a href="https://github.com/NVlabs/FoundationPose">FoundationPose</a>, and SAM 3. Thanks to collaborators at GE and the University of Pennsylvania.</div>
+  <div>Changlin Song · <a href="https://charliesong1999.github.io/">charliesong1999.github.io</a></div>
+</div></footer>
+
+<script>
+(function () {
+  var stages = [
+    ["01-simple-move", "First task reward", "Small jug, the default move objective. Already succeeds: the starting point was not failure."],
+    ["02-gentle-guided-v4", "Gentle arm roll", "Prompt: “Need to do it gently.” The agent rewrites the reward around a guided arm roll, which reached the goal on 3 of 3 seeds."],
+    ["03-navigation-v3", "Site navigation", "Goal is now across a SLAM-reconstructed site. A* waypoints give the 2 s horizon something it can see."],
+    ["04-heavy-baseline", "Heavy barrel baseline", "The jug-era reward applied unchanged to the 116 kg half-water barrel, as the baseline for the next rounds."],
+    ["05-align-body", "Axis alignment, body push", "Adds a heading term and lets the body push. Path progress rises, but the barrel axis turns only −1.4°."],
+    ["06-lever-body-press", "End contact, staged turning", "Turning becomes its own phase: the robot presses the barrel near its end for a lever arm."],
+    ["07-center-soft", "Turning centre", "A soft centre-holding term halves drift during the turn (see the chart below)."],
+    ["08-completion-first", "Completion first", "Masks non-safety costs. First turn finishes in 20.8 s instead of 27.5 s, with 0.93 m instead of 0.67 m of path progress."],
+    ["09-completion-native", "Final configuration", "Restores ±0.7 m/s base command range. This configuration produced the full successful run."]
+  ];
+  var list = document.getElementById("stages"), vid = document.getElementById("stageVideo"), cap = document.getElementById("stageCaption");
+  function show(i) {
+    var s = stages[i];
+    vid.src = "static/videos/stage_" + s[0] + ".mp4"; vid.poster = "static/images/stage_" + s[0] + ".jpg"; var pr = vid.play(); if (pr && pr.catch) pr.catch(function () {});
+    cap.innerHTML = "<b>Round " + (i + 1) + " · " + s[1] + ".</b> " + s[2];
+    Array.prototype.forEach.call(list.querySelectorAll("button"), function (b, j) { b.setAttribute("aria-pressed", j === i ? "true" : "false"); });
+  }
+  stages.forEach(function (s, i) {
+    var li = document.createElement("li"), b = document.createElement("button");
+    b.type = "button"; b.innerHTML = '<span class="n">' + String(i + 1).padStart(2, "0") + "</span><span>" + s[1] + "</span>";
+    b.addEventListener("click", function () { show(i); });
+    li.appendChild(b); list.appendChild(li);
+  });
+  show(0);
+
+  // Per-task paired success (EXP-004 r2)
+  var tasks = [
+    ["Move · Box", 2, 4, 8], ["Move · Chair", 1, 1, 8], ["Move · Cone", 3, 2, 7], ["Move · Tire", 0, 1, 6], ["Move · Tire rack", 4, 5, 7],
+    ["Upright · Box", 4, 4, 7], ["Upright · Chair", 0, 1, 7], ["Upright · Cone", 0, 5, 7], ["Upright · Tire", 4, 6, 7], ["Upright · Tire rack", 1, 5, 7]
+  ];
+  var svg = document.getElementById("taskChart"), NS = "http://www.w3.org/2000/svg";
+  function el(n, a, t) { var e = document.createElementNS(NS, n); for (var k in a) e.setAttribute(k, a[k]); if (t != null) e.textContent = t; svg.appendChild(e); return e; }
+  var x0 = 130, x1 = 520, rowH = 29, top = 14;
+  [0, 0.25, 0.5, 0.75, 1].forEach(function (p) {
+    var x = x0 + p * (x1 - x0);
+    el("line", { x1: x, x2: x, y1: top - 4, y2: top + tasks.length * rowH, "class": "grid" });
+    el("text", { x: x, y: top + tasks.length * rowH + 16, "text-anchor": "middle" }, (p * 100) + "%");
+  });
+  tasks.forEach(function (t, i) {
+    var y = top + i * rowH;
+    el("text", { x: x0 - 8, y: y + 15, "text-anchor": "end", "class": "lbl" }, t[0]);
+    var a = t[1] / t[3], m = t[2] / t[3];
+    el("rect", { x: x0, y: y + 2, width: Math.max(1, a * (x1 - x0)), height: 10, "class": "llm" });
+    el("rect", { x: x0, y: y + 13, width: Math.max(1, m * (x1 - x0)), height: 10, "class": "mpc" });
+    el("text", { x: x0 + Math.max(a, m) * (x1 - x0) + 6, y: y + 17 }, t[1] + " vs " + t[2] + " / " + t[3]);
+  });
+
+  // Latency on a log scale, 10 ms to 100 s
+  var lat = [["One rollout (2 s)", 0.0209, "var(--cool)", "20.9 ms"], ["One MPC plan", 0.0377, "var(--cool)", "37.7 ms"], ["Planning period", 0.05, "var(--muted)", "50 ms"], ["LLM request, median", 11.53, "var(--warm)", "11.5 s"], ["LLM request, P95", 22.54, "var(--warm)", "22.5 s"]];
+  var L = document.getElementById("latency"), lo = Math.log10(0.01), hi = Math.log10(100);
+  lat.forEach(function (r) {
+    var w = ((Math.log10(r[1]) - lo) / (hi - lo)) * 100;
+    var row = document.createElement("div"); row.className = "lat-row";
+    row.innerHTML = '<span>' + r[0] + '</span><span class="bar" style="width:' + w.toFixed(1) + '%;background:' + r[2] + '"></span><span class="v">' + r[3] + '</span>';
+    L.appendChild(row);
+  });
+  var ax = document.createElement("div"); ax.className = "lat-row"; ax.style.color = "var(--muted)"; ax.style.fontSize = "0.75rem";
+  ax.innerHTML = '<span></span><span class="mono" style="display:flex;justify-content:space-between"><span>10 ms</span><span>1 s</span><span>100 s</span></span><span></span>';
+  L.appendChild(ax);
+  if ("IntersectionObserver" in window && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    var io = new IntersectionObserver(function (es) { es.forEach(function (e) { if (e.isIntersecting) { var p = e.target.play(); if (p && p.catch) p.catch(function () {}); } else e.target.pause(); }); }, { threshold: 0.15 });
+    Array.prototype.forEach.call(document.querySelectorAll("video.auto"), function (v) { io.observe(v); });
+  }
+})();
+</script>
+</body>
+</html>
